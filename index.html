@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Virsihaku – 1938/1956 ↔ 1986</title>
+    <title>Virsihaku – 1938 ↔ 1986</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500&amp;family=Space+Grotesk:wght@500&amp;display=swap');
         
@@ -196,7 +196,7 @@
     <div class="container">
         <header>
             <h1>📖 Virsihaku</h1>
-            <p class="subtitle">1938/1956 virsikirja ↔ 1986 virsikirja</p>
+            <p class="subtitle">1938 virsikirja ↔ 1986 virsikirja</p>
         </header>
         
         <main>
@@ -228,13 +228,11 @@
         </main>
         
         <footer>
-            Tiedot perustuvat virsikirja.fi:n vastaavuuksiin • Ohjelma toimii täysin selaimessa<br>
-            Voit käyttää myös näppäimistöllä (Enter)
+            Tiedot perustuvat virsikirja.fi:n vastaavuuksiin
         </footer>
     </div>
 
     <script>
-        // TÄSSÄ ON KAIKKI TIEDOT SUORAAN KOODISSA (ei tarvetta erilliselle JSON-tiedostolle)
         const mappings = {
             "1938_to_1986": {
                 "1": 4, "2": 2, "3": 5, "4": 266, "5": 8, "6": 10, "7": 7, "8": 3, "9": 9, "10": null,
@@ -394,7 +392,7 @@
             
             const label = document.getElementById('input-label');
             label.textContent = dir === 0 
-                ? '1938/1956 virren numero' 
+                ? '1938 virren numero' 
                 : '1986 virren numero';
             
             document.getElementById('number-input').focus();
@@ -421,7 +419,7 @@
             
             if (currentDirection === 0) {
                 // Vanha → Nykyinen
-                fromBook = '1938/1956';
+                fromBook = '1938';
                 toBook = '1986';
                 const mapping = mappings["1938_to_1986"];
                 const target = mapping[num.toString()];
@@ -433,18 +431,18 @@
                         <div class="old-num">${num}</div>
                         <div class="arrow">→</div>
                         <div class="new-num">${target}</div>
-                        <div class="info">Virsi ${num} (1938/1956) vastaa virttä ${target} (1986)</div>
+                        <div class="info">Virsi ${num} (1938) vastaa virttä ${target} (1986)</div>
                     `;
                 }
             } else {
                 // Nykyinen → Vanha
                 fromBook = '1986';
-                toBook = '1938/1956';
+                toBook = '1938';
                 const mapping = mappings["1986_to_1938"];
                 let target = mapping[num.toString()];
                 
                 if (target === null || target === undefined) {
-                    resultHTML = `<span style="color:#b91c1c">Virttä numero <strong>${num}</strong> ei löydy 1938/1956-kirjasta tai vastaavuus puuttuu.</span>`;
+                    resultHTML = `<span style="color:#b91c1c">Virttä numero <strong>${num}</strong> ei löydy 1938-kirjasta tai vastaavuus puuttuu.</span>`;
                 } else if (Array.isArray(target)) {
                     resultHTML = `
                         <div class="new-num">${num}</div>
@@ -457,7 +455,7 @@
                         <div class="new-num">${num}</div>
                         <div class="arrow">←</div>
                         <div class="old-num">${target}</div>
-                        <div class="info">Virsi ${num} (1986) vastaa virttä ${target} (1938/1956)</div>
+                        <div class="info">Virsi ${num} (1986) vastaa virttä ${target} (1938)</div>
                     `;
                 }
             }
