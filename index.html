@@ -15,7 +15,7 @@
             justify-content: center;
         }
         .container {
-            max-width: 640px;
+            max-width: 700px;
             width: 100%;
             background: white;
             border-radius: 20px;
@@ -29,7 +29,7 @@
             padding: 2rem 2.5rem;
             text-align: center;
         }
-        h1 { margin: 0; font-size: 2.2rem; font-family: 'Space Grotesk', sans-serif; }
+        h1 { margin: 0; font-size: 2.25rem; font-family: 'Space Grotesk', sans-serif; }
         .subtitle { margin: 8px 0 0; opacity: 0.95; }
 
         main { padding: 2.5rem; }
@@ -63,7 +63,10 @@
             font-size: 1.45rem;
             margin-bottom: 1rem;
         }
-        input:focus { border-color: #2a4a8c; outline: none; }
+        input:focus {
+            border-color: #2a4a8c;
+            outline: none;
+        }
 
         button {
             width: 100%;
@@ -83,32 +86,29 @@
             padding: 1.8rem;
             display: none;
             flex-direction: column;
-            gap: 14px;
+            gap: 16px;
         }
         .result.show { display: flex; }
 
         .virsi-num {
-            font-size: 2.9rem;
+            font-size: 2.8rem;
             font-weight: 700;
             color: #1e3a8a;
-            margin: 0;
+            margin: 0 0 8px 0;
         }
         .alkusana {
-            font-size: 1.4rem;
+            font-size: 1.45rem;
             font-weight: 500;
             color: #166534;
             background: white;
             padding: 18px;
             border-radius: 10px;
             border-left: 7px solid #166534;
-            line-height: 1.4;
+            line-height: 1.45;
         }
-        .info { color: #64748b; font-size: 1.05rem; }
-
-        .loading {
-            text-align: center;
+        .info {
             color: #64748b;
-            padding: 20px;
+            font-size: 1.05rem;
         }
     </style>
 </head>
@@ -116,19 +116,20 @@
     <div class="container">
         <header>
             <h1>📖 Virsihaku</h1>
-            <p class="subtitle">1938 ↔ 1986 virsikirja + aloitussanat</p>
+            <p class="subtitle">1938 ↔ 1986 virsikirja</p>
         </header>
 
         <main>
             <div class="tabs">
-                <div id="tab-old" class="tab active" onclick="setDirection(0)">Vanha → Nykyinen</div>
-                <div id="tab-new" class="tab" onclick="setDirection(1)">Nykyinen → Vanha</div>
+                <div id="tab-old" class="tab active" onclick="setMode(0)">Vanha numero → Nykyinen</div>
+                <div id="tab-new" class="tab" onclick="setMode(1)">Nykyinen numero → Vanha</div>
+                <div id="tab-name" class="tab" onclick="setMode(2)">Nimihaku</div>
             </div>
 
             <label id="input-label" style="display:block; margin-bottom:8px; font-weight:500;">1938 virren numero</label>
-            <input type="number" id="number-input" placeholder="esim. 42" onkeypress="if(event.key==='Enter') convert()">
+            <input type="text" id="search-input" placeholder="Syötä numero tai alkusana" onkeypress="if(event.key==='Enter') search()">
 
-            <button onclick="convert()">🔍 Hae vastaavuus</button>
+            <button onclick="search()">🔍 Hae</button>
 
             <div id="result" class="result">
                 <div id="result-content"></div>
@@ -139,7 +140,7 @@
     <script>
         let mapping = null;
         let alkusanat = null;
-        let currentDirection = 0;
+        let currentMode = 0;   // 0 = vanha→nykyinen, 1 = nykyinen→vanha, 2 = nimihaku
 
         async function loadData() {
             try {
@@ -147,75 +148,111 @@
                     fetch('virret_1938_to_1986.json'),
                     fetch('alkusanat.json')
                 ]);
-
                 mapping = await mapRes.json();
                 alkusanat = await sanaRes.json();
-
-                console.log('✅ Virsidata ladattu onnistuneesti');
+                console.log('✅ Data ladattu');
             } catch (e) {
-                console.error(e);
-                alert('Datan lataus epäonnistui. Tarkista että tiedostot virret_1938_to_1986.json ja alkusanat.json ovat samassa kansiossa.');
+                alert('Virhe datan latauksessa. Tarkista tiedostot virret_1938_to_1986.json ja alkusanat.json');
             }
         }
 
-        function setDirection(dir) {
-            currentDirection = dir;
-            document.getElementById('tab-old').classList.toggle('active', dir === 0);
-            document.getElementById('tab-new').classList.toggle('active', dir === 1);
-            document.getElementById('input-label').textContent = dir === 0 
-                ? '1938 virren numero' 
-                : '1986 virren numero';
+        function setMode(mode) {
+            currentMode = mode;
+            document.getElementById('tab-old').classList.toggle('active', mode === 0);
+            document.getElementById('tab-new').classList.toggle('active', mode === 1);
+            document.getElementById('tab-name').classList.toggle('active', mode === 2);
+
+            const label = document.getElementById('input-label');
+            const input = document.getElementById('search-input');
+
+            if (mode === 0) {
+                label.textContent = "Vanha numero (1938)";
+                input.placeholder = "esim. 42";
+            } else if (mode === 1) {
+                label.textContent = "Nykyinen numero (1986)";
+                input.placeholder = "esim. 266";
+            } else {
+                label.textContent = "Alkusana tai osa virren nimestä";
+                input.placeholder = "esim. Hoosianna, Jumala loi, Jeesus";
+            }
+            input.focus();
         }
 
-        function getAlkusana(num) {
-            if (!alkusanat) return "Aloitussana ei tiedossa";
-            return alkusanat[num.toString()] || "Aloitussana ei tiedossa";
-        }
-
-        function convert() {
+        function search() {
             if (!mapping || !alkusanat) {
-                alert("Odota hetki, dataa vielä ladataan...");
+                alert("Dataa ladataan vielä...");
                 return;
             }
 
-            const input = document.getElementById('number-input').value.trim();
-            if (!input) return alert("Syötä virren numero!");
-
-            const num = parseInt(input);
-            if (isNaN(num) || num < 1) return alert("Virheellinen numero!");
+            const query = document.getElementById('search-input').value.trim();
+            if (!query) return alert("Syötä hakuehto!");
 
             let resultHTML = '';
 
-            if (currentDirection === 0) {
-                const target = mapping["1938_to_1986"][num.toString()];
-                if (target == null) {
-                    resultHTML = `<p style="color:#b91c1c">Virttä numero ${num} ei löydy nykyisestä virsikirjasta (1986).</p>`;
+            if (currentMode === 0 || currentMode === 1) {
+                // ==================== NUMEROHaku ====================
+                const num = parseInt(query);
+                if (isNaN(num)) {
+                    resultHTML = `<p style="color:#b91c1c">Syötä numero.</p>`;
                 } else {
-                    const sana = getAlkusana(target);
-                    resultHTML = `
-                        <div class="virsi-num">${num} → ${target}</div>
-                        <div class="alkusana">${sana}</div>
-                        <div class="info">Virsi ${num} (1938) vastaa virttä ${target} (1986)</div>
-                    `;
+                    let oldNum, newNum, sana;
+
+                    if (currentMode === 0) {
+                        // Vanha → Nykyinen
+                        newNum = mapping["1938_to_1986"][num.toString()];
+                        oldNum = num;
+                    } else {
+                        // Nykyinen → Vanha
+                        oldNum = mapping["1986_to_1938"][num.toString()];
+                        newNum = num;
+                    }
+
+                    sana = alkusanat[newNum ? newNum.toString() : oldNum.toString()] || "Aloitussana ei tiedossa";
+
+                    if (newNum !== undefined && newNum !== null) {
+						if (currentMode == 0) {
+							resultHTML = `
+								<div class="virsi-num">${oldNum} → ${newNum}</div>
+								<div class="alkusana">${sana}</div>
+								<div class="info">Virsi ${oldNum} (1938) vastaa virttä ${newNum} (1986)</div>;
+							`	
+						}
+						else {
+							resultHTML = `
+								<div class="virsi-num">${newNum} → ${oldNum}</div>
+								<div class="alkusana">${sana}</div>
+								<div class="info">Virsi ${newNum} (1986) vastaa virttä ${oldNum} (1938)</div>;
+							`
+						}
+                        
+                    } else {
+                        resultHTML = `<p style="color:#b91c1c">Virttä numero ${num} ei löytynyt.</p>`;
+                    }
                 }
             } else {
-                let target = mapping["1986_to_1938"][num.toString()];
-                if (target == null) {
-                    resultHTML = `<p style="color:#b91c1c">Virttä numero ${num} ei löydy vanhasta virsikirjasta (1938).</p>`;
-                } else if (Array.isArray(target)) {
-                    const sana = getAlkusana(num);
-                    resultHTML = `
-                        <div class="virsi-num">${num} ← ${target.join(', ')}</div>
-                        <div class="alkusana">${sana}</div>
-                        <div class="info">Virsi ${num} (1986) vastaa vanhoja virsiä ${target.join(', ')} (1938)</div>
-                    `;
-                } else {
-                    const sana = getAlkusana(num);
-                    resultHTML = `
-                        <div class="virsi-num">${num} ← ${target}</div>
-                        <div class="alkusana">${sana}</div>
-                        <div class="info">Virsi ${num} (1986) vastaa virttä ${target} (1938)</div>
-                    `;
+                // ==================== NIMIHAKU ====================
+                const lowerQuery = query.toLowerCase();
+                let found = false;
+                resultHTML = '<h3 style="margin:0 0 15px 0;">Löydetyt virret:</h3>';
+
+                for (const [numStr, sana] of Object.entries(alkusanat)) {
+                    if (sana.toLowerCase().includes(lowerQuery) || numStr === query) {
+                        found = true;
+                        const num = parseInt(numStr);
+                        const oldNum = mapping["1986_to_1938"][numStr] || "—";
+
+                        resultHTML += `
+                            <div style="margin-bottom:20px; padding:14px; background:white; border-radius:10px; border-left:6px solid #166534;">
+                                <div class="virsi-num">${num} → ${oldNum}</div>
+                                <div class="alkusana">${sana}</div>
+                                <div class="info">Virsi ${num} (1986) vastaa virttä ${oldNum} (1938)</div>
+                            </div>
+                        `;
+                    }
+                }
+
+                if (!found) {
+                    resultHTML = `<p style="color:#b91c1c">Ei löytynyt virttä hakuehdolla "${query}".</p>`;
                 }
             }
 
@@ -226,8 +263,8 @@
         // Käynnistys
         window.onload = () => {
             loadData();
-            setDirection(0);
-            document.getElementById('number-input').focus();
+            setMode(0);
+            document.getElementById('search-input').focus();
         };
     </script>
 </body>
