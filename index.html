@@ -76,6 +76,12 @@
             outline: none;
         }
 
+        .helptext {
+            margin: -6px 0 1rem 0;
+            color: #64748b;
+            font-size: 0.95rem;
+        }
+
         button {
             width: 100%;
             padding: 18px;
@@ -129,20 +135,23 @@
 
         <main>
             <div class="tabs" role="tablist" aria-label="Hakutila">
-                <button id="tab-old" class="tab active" type="button" role="tab" aria-selected="true" tabindex="0" data-mode="0">Vanha numero → Nykyinen</button>
-                <button id="tab-new" class="tab" type="button" role="tab" aria-selected="false" tabindex="-1" data-mode="1">Nykyinen numero → Vanha</button>
-                <button id="tab-name" class="tab" type="button" role="tab" aria-selected="false" tabindex="-1" data-mode="2">Nimihaku</button>
+                <button id="tab-old" class="tab active" type="button" role="tab" aria-controls="panel-search" aria-selected="true" tabindex="0" data-mode="0">Vanha numero → Nykyinen</button>
+                <button id="tab-new" class="tab" type="button" role="tab" aria-controls="panel-search" aria-selected="false" tabindex="-1" data-mode="1">Nykyinen numero → Vanha</button>
+                <button id="tab-name" class="tab" type="button" role="tab" aria-controls="panel-search" aria-selected="false" tabindex="-1" data-mode="2">Nimihaku</button>
             </div>
 
+            <div id="panel-search" role="tabpanel" tabindex="0" aria-labelledby="tab-old">
             <form id="search-form">
                 <label id="input-label" for="search-input" style="display:block; margin-bottom:8px; font-weight:500;">1938 virren numero</label>
-                <input type="text" id="search-input" placeholder="Syötä numero tai alkusana" autocomplete="off">
+                <input type="text" id="search-input" placeholder="Syötä numero tai alkusana" autocomplete="off" maxlength="40" aria-describedby="input-help">
+                <div id="input-help" class="helptext">Max 40 merkkiä.</div>
 
                 <button type="submit">🔍 Hae</button>
             </form>
 
-            <div id="result" class="result">
+            <div id="result" class="result" role="status" aria-live="polite">
                 <div id="result-content"></div>
+            </div>
             </div>
         </main>
     </div>
@@ -152,6 +161,7 @@
         let alkusanat = null;
         let currentMode = 0;   // 0 = vanha→nykyinen, 1 = nykyinen→vanha, 2 = nimihaku
         let lastFocusedTabId = 'tab-old';
+        const MAX_QUERY_CHARS = 40;
 
         async function loadData() {
             try {
@@ -161,10 +171,22 @@
                 ]);
                 mapping = await mapRes.json();
                 alkusanat = await sanaRes.json();
-                console.log('✅ Data ladattu');
             } catch (e) {
-                alert('Virhe datan latauksessa. Tarkista tiedostot virret_1938_to_1986.json ja alkusanat.json');
+                showError('Virhe datan latauksessa. Tarkista tiedostot virret_1938_to_1986.json ja alkusanat.json.');
             }
+        }
+
+        function el(tag, className, text) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text !== undefined) node.textContent = text;
+            return node;
+        }
+
+        function showError(message) {
+            const p = el('p', null, message);
+            p.style.color = '#b91c1c';
+            showResultNode(p);
         }
 
         function setMode(mode) {
@@ -183,24 +205,27 @@
 
             const label = document.getElementById('input-label');
             const input = document.getElementById('search-input');
+            const panel = document.getElementById('panel-search');
+            const activeTab = tabs[mode] || tabs[0];
+            if (activeTab) panel.setAttribute('aria-labelledby', activeTab.id);
 
             if (mode === 0) {
                 label.textContent = "Vanha numero (1938)";
                 input.placeholder = "esim. 42";
+                input.inputMode = 'numeric';
+                input.pattern = '\\d*';
             } else if (mode === 1) {
                 label.textContent = "Nykyinen numero (1986)";
                 input.placeholder = "esim. 266";
+                input.inputMode = 'numeric';
+                input.pattern = '\\d*';
             } else {
                 label.textContent = "Alkusana tai osa virren nimestä";
                 input.placeholder = "esim. Hoosianna, Jumala loi, Jeesus";
+                input.inputMode = 'text';
+                input.removeAttribute('pattern');
             }
             input.focus();
-        }
-
-        function showResultHTML(html) {
-            const content = document.getElementById('result-content');
-            content.innerHTML = html;
-            document.getElementById('result').classList.add('show');
         }
 
         function showResultNode(node) {
@@ -211,20 +236,26 @@
 
         function search() {
             if (!mapping || !alkusanat) {
-                alert("Dataa ladataan vielä...");
+                showError("Dataa ladataan vielä...");
                 return;
             }
 
-            const query = document.getElementById('search-input').value.trim();
-            if (!query) return alert("Syötä hakuehto!");
-
-            let resultHTML = '';
+            const input = document.getElementById('search-input');
+            let query = input.value.trim();
+            if (query.length > MAX_QUERY_CHARS) {
+                query = query.slice(0, MAX_QUERY_CHARS);
+                input.value = query;
+            }
+            if (!query) {
+                showError("Syötä hakuehto!");
+                return;
+            }
 
             if (currentMode === 0 || currentMode === 1) {
                 // ==================== NUMEROHaku ====================
-                const num = parseInt(query);
+                const num = parseInt(query, 10);
                 if (isNaN(num)) {
-                    resultHTML = `<p style="color:#b91c1c">Syötä numero.</p>`;
+                    showError("Syötä numero.");
                 } else {
                     let oldNum, newNum, sana;
 
@@ -241,30 +272,33 @@
                     sana = alkusanat[newNum ? newNum.toString() : oldNum.toString()] || "Aloitussana ei tiedossa";
 
                     if (newNum !== undefined && newNum !== null) {
-						if (currentMode == 0) {
-							resultHTML = `
-								<div class="virsi-num">${oldNum} → ${newNum}</div>
-								<div class="alkusana">${sana}</div>
-								<div class="info">Virsi ${oldNum} (1938) vastaa virttä ${newNum} (1986)</div>
-							`	
-						}
-						else {
-							resultHTML = `
-								<div class="virsi-num">${newNum} → ${oldNum}</div>
-								<div class="alkusana">${sana}</div>
-								<div class="info">Virsi ${newNum} (1986) vastaa virttä ${oldNum} (1938)</div>
-							`
-						}
-                        
+                        const wrap = el('div');
+                        if (currentMode === 0) {
+                            wrap.append(
+                                el('div', 'virsi-num', `${oldNum} → ${newNum}`),
+                                el('div', 'alkusana', sana),
+                                el('div', 'info', `Virsi ${oldNum} (1938) vastaa virttä ${newNum} (1986)`)
+                            );
+                        } else {
+                            wrap.append(
+                                el('div', 'virsi-num', `${newNum} → ${oldNum}`),
+                                el('div', 'alkusana', sana),
+                                el('div', 'info', `Virsi ${newNum} (1986) vastaa virttä ${oldNum} (1938)`)
+                            );
+                        }
+                        showResultNode(wrap);
                     } else {
-                        resultHTML = `<p style="color:#b91c1c">Virttä numero ${num} ei löytynyt.</p>`;
+                        showError(`Virttä numero ${num} ei löytynyt.`);
                     }
                 }
             } else {
                 // ==================== NIMIHAKU ====================
                 const lowerQuery = query.toLowerCase();
                 let found = false;
-                resultHTML = '<h3 style="margin:0 0 15px 0;">Löydetyt virret:</h3>';
+                const wrap = el('div');
+                const h = el('h3', null, 'Löydetyt virret:');
+                h.style.margin = '0 0 15px 0';
+                wrap.append(h);
 
                 for (const [numStr, sana] of Object.entries(alkusanat)) {
                     if (sana.toLowerCase().includes(lowerQuery) || numStr === query) {
@@ -272,34 +306,37 @@
                         const num = parseInt(numStr);
                         const oldNum = mapping["1986_to_1938"][numStr] || "—";
 
-                        resultHTML += `
-                            <div style="margin-bottom:20px; padding:14px; background:white; border-radius:10px; border-left:6px solid #166534;">
-                                <div class="virsi-num">${num} → ${oldNum}</div>
-                                <div class="alkusana">${sana}</div>
-                                <div class="info">Virsi ${num} (1986) vastaa virttä ${oldNum} (1938)</div>
-                            </div>
-                        `;
+                        const item = el('div');
+                        item.style.marginBottom = '20px';
+                        item.style.padding = '14px';
+                        item.style.background = 'white';
+                        item.style.borderRadius = '10px';
+                        item.style.borderLeft = '6px solid #166534';
+                        item.append(
+                            el('div', 'virsi-num', `${num} → ${oldNum}`),
+                            el('div', 'alkusana', sana),
+                            el('div', 'info', `Virsi ${num} (1986) vastaa virttä ${oldNum} (1938)`)
+                        );
+                        wrap.append(item);
                     }
                 }
 
                 if (!found) {
-                    const p = document.createElement('p');
+                    const p = el('p');
                     p.style.color = '#b91c1c';
                     p.append('Ei löytynyt virttä hakuehdolla "');
-                    const q = document.createElement('span');
-                    q.textContent = query;
+                    const q = el('span', null, query);
                     p.append(q);
                     p.append('".');
                     showResultNode(p);
                     return;
                 }
+                showResultNode(wrap);
             }
-
-            showResultHTML(resultHTML);
         }
 
         // Käynnistys
-        window.onload = () => {
+        document.addEventListener('DOMContentLoaded', () => {
             const tabOld = document.getElementById('tab-old');
             const tabNew = document.getElementById('tab-new');
             const tabName = document.getElementById('tab-name');
@@ -334,10 +371,29 @@
                 search();
             });
 
+            const input = document.getElementById('search-input');
+            input.maxLength = MAX_QUERY_CHARS;
+            const help = document.getElementById('input-help');
+            if (help) help.textContent = `Max ${MAX_QUERY_CHARS} merkkiä.`;
+            let isComposing = false;
+            input.addEventListener('compositionstart', () => { isComposing = true; });
+            input.addEventListener('compositionend', () => {
+                isComposing = false;
+                if (input.value.length > MAX_QUERY_CHARS) {
+                    input.value = input.value.slice(0, MAX_QUERY_CHARS);
+                }
+            });
+            input.addEventListener('input', () => {
+                if (isComposing) return;
+                if (input.value.length > MAX_QUERY_CHARS) {
+                    input.value = input.value.slice(0, MAX_QUERY_CHARS);
+                }
+            });
+
             loadData();
             setMode(0);
             document.getElementById('search-input').focus();
-        };
+        });
     </script>
 </body>
 </html>
