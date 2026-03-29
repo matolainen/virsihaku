@@ -48,11 +48,19 @@
             border-radius: 10px;
             font-weight: 500;
             cursor: pointer;
+            background: transparent;
+            border: none;
+            color: inherit;
+            font: inherit;
         }
         .tab.active {
             background: white;
             box-shadow: 0 10px 15px -3px rgb(42 74 140 / 0.1);
             color: #2a4a8c;
+        }
+        .tab:focus-visible {
+            outline: 3px solid rgb(42 74 140 / 0.35);
+            outline-offset: 2px;
         }
 
         input {
@@ -120,16 +128,18 @@
         </header>
 
         <main>
-            <div class="tabs">
-                <div id="tab-old" class="tab active" onclick="setMode(0)">Vanha numero → Nykyinen</div>
-                <div id="tab-new" class="tab" onclick="setMode(1)">Nykyinen numero → Vanha</div>
-                <div id="tab-name" class="tab" onclick="setMode(2)">Nimihaku</div>
+            <div class="tabs" role="tablist" aria-label="Hakutila">
+                <button id="tab-old" class="tab active" type="button" role="tab" aria-selected="true" tabindex="0" data-mode="0">Vanha numero → Nykyinen</button>
+                <button id="tab-new" class="tab" type="button" role="tab" aria-selected="false" tabindex="-1" data-mode="1">Nykyinen numero → Vanha</button>
+                <button id="tab-name" class="tab" type="button" role="tab" aria-selected="false" tabindex="-1" data-mode="2">Nimihaku</button>
             </div>
 
-            <label id="input-label" style="display:block; margin-bottom:8px; font-weight:500;">1938 virren numero</label>
-            <input type="text" id="search-input" placeholder="Syötä numero tai alkusana" onkeypress="if(event.key==='Enter') search()">
+            <form id="search-form">
+                <label id="input-label" for="search-input" style="display:block; margin-bottom:8px; font-weight:500;">1938 virren numero</label>
+                <input type="text" id="search-input" placeholder="Syötä numero tai alkusana" autocomplete="off">
 
-            <button onclick="search()">🔍 Hae</button>
+                <button type="submit">🔍 Hae</button>
+            </form>
 
             <div id="result" class="result">
                 <div id="result-content"></div>
@@ -141,6 +151,7 @@
         let mapping = null;
         let alkusanat = null;
         let currentMode = 0;   // 0 = vanha→nykyinen, 1 = nykyinen→vanha, 2 = nimihaku
+        let lastFocusedTabId = 'tab-old';
 
         async function loadData() {
             try {
@@ -158,9 +169,17 @@
 
         function setMode(mode) {
             currentMode = mode;
-            document.getElementById('tab-old').classList.toggle('active', mode === 0);
-            document.getElementById('tab-new').classList.toggle('active', mode === 1);
-            document.getElementById('tab-name').classList.toggle('active', mode === 2);
+            const tabs = [
+                document.getElementById('tab-old'),
+                document.getElementById('tab-new'),
+                document.getElementById('tab-name')
+            ];
+            tabs.forEach((tab, idx) => {
+                const active = idx === mode;
+                tab.classList.toggle('active', active);
+                tab.setAttribute('aria-selected', active ? 'true' : 'false');
+                tab.tabIndex = active ? 0 : -1;
+            });
 
             const label = document.getElementById('input-label');
             const input = document.getElementById('search-input');
@@ -176,6 +195,18 @@
                 input.placeholder = "esim. Hoosianna, Jumala loi, Jeesus";
             }
             input.focus();
+        }
+
+        function showResultHTML(html) {
+            const content = document.getElementById('result-content');
+            content.innerHTML = html;
+            document.getElementById('result').classList.add('show');
+        }
+
+        function showResultNode(node) {
+            const content = document.getElementById('result-content');
+            content.replaceChildren(node);
+            document.getElementById('result').classList.add('show');
         }
 
         function search() {
@@ -214,14 +245,14 @@
 							resultHTML = `
 								<div class="virsi-num">${oldNum} → ${newNum}</div>
 								<div class="alkusana">${sana}</div>
-								<div class="info">Virsi ${oldNum} (1938) vastaa virttä ${newNum} (1986)</div>;
+								<div class="info">Virsi ${oldNum} (1938) vastaa virttä ${newNum} (1986)</div>
 							`	
 						}
 						else {
 							resultHTML = `
 								<div class="virsi-num">${newNum} → ${oldNum}</div>
 								<div class="alkusana">${sana}</div>
-								<div class="info">Virsi ${newNum} (1986) vastaa virttä ${oldNum} (1938)</div>;
+								<div class="info">Virsi ${newNum} (1986) vastaa virttä ${oldNum} (1938)</div>
 							`
 						}
                         
@@ -252,16 +283,57 @@
                 }
 
                 if (!found) {
-                    resultHTML = `<p style="color:#b91c1c">Ei löytynyt virttä hakuehdolla "${query}".</p>`;
+                    const p = document.createElement('p');
+                    p.style.color = '#b91c1c';
+                    p.append('Ei löytynyt virttä hakuehdolla "');
+                    const q = document.createElement('span');
+                    q.textContent = query;
+                    p.append(q);
+                    p.append('".');
+                    showResultNode(p);
+                    return;
                 }
             }
 
-            document.getElementById('result-content').innerHTML = resultHTML;
-            document.getElementById('result').classList.add('show');
+            showResultHTML(resultHTML);
         }
 
         // Käynnistys
         window.onload = () => {
+            const tabOld = document.getElementById('tab-old');
+            const tabNew = document.getElementById('tab-new');
+            const tabName = document.getElementById('tab-name');
+            const tabs = [tabOld, tabNew, tabName];
+
+            tabs.forEach((tab) => {
+                tab.addEventListener('click', () => {
+                    lastFocusedTabId = tab.id;
+                    setMode(parseInt(tab.dataset.mode, 10));
+                });
+                tab.addEventListener('keydown', (e) => {
+                    const currentIdx = tabs.indexOf(tab);
+                    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        const dir = e.key === 'ArrowRight' ? 1 : -1;
+                        const nextIdx = (currentIdx + dir + tabs.length) % tabs.length;
+                        tabs[nextIdx].focus();
+                    }
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        lastFocusedTabId = tab.id;
+                        setMode(parseInt(tab.dataset.mode, 10));
+                    }
+                });
+                tab.addEventListener('focus', () => {
+                    lastFocusedTabId = tab.id;
+                });
+            });
+
+            document.getElementById('search-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                search();
+            });
+
             loadData();
             setMode(0);
             document.getElementById('search-input').focus();
